@@ -50,3 +50,4 @@ m = l;  % Second image coordinate := cos(theta)sin(phi)
 
 %% Your Imaging Algorithm should come hereafter...
 image(poslocal)
+%test

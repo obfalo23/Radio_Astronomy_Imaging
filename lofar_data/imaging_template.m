@@ -42,7 +42,7 @@ D = max(dist(:)); % Maximum Baseline
 
 
 % define a grid of image coordinates (l,m) at the right resolution
-FracAngle = 4;% fraction of theoretical limit for angle resolution
+FracAngle = 0.25;% fraction of theoretical limit for angle resolution
                  % 0.25 means ~4x4 pixels in the main lobe
 dl = FracAngle * lambda / D; % width/height of a pixel
 l = 0:dl:1; % First image coordinate := cos(theta)cos(phi)
@@ -93,10 +93,10 @@ disp(size(direction_matrix));
 % element of the direction vector, do this for all direction vectors.
 % Demensions of dirty beam
 dirty_beam = zeros(size(l,1), size(m,1));
-
+dirtyImage = zeros(size(l,1), size(m,1));
 % Reshape baseline_vector to be (p*p, 3) for easy matrix multiplication
 baseline_vector_reshaped = reshape(baseline_vector, p*p, 3);
-
+RhReshaped = reshape(Rh, p*p, 1);
 % Reshape direction_matrix to be (513*513, 3) for easy matrix multiplication
 direction_matrix_reshaped = reshape(direction_matrix, 513*513, 3);
 direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
@@ -131,6 +131,7 @@ for pos_l=1:size(l,1)
         component = baseline_vector_reshaped*transpose(direction_vector);
 
         dirty_beam(pos_l,pos_m) = sum(exp(1j*component),1);
+        dirtyImage(pos_l,pos_m) = sum(RhReshaped.*exp(1j*component),1);
 
     end
     disp(pos_l)
@@ -145,7 +146,12 @@ colorbar;          % Display a color bar to the right
 % Set the color axis limits (optional, for consistent color scaling)
 caxis([0, 5000]); % 5000 looks cool
 
-
+figure;
+imagesc(abs(dirtyImage));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;  
+caxis([0, 300]);
 % save any matrixes in xlsx files
 % filename = 'dirty_beam_513.xlsx';
 % writematrix(dirty_beam,filename);

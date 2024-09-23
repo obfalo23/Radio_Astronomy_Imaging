@@ -98,22 +98,22 @@ dirtyImage = zeros(size(l,1), size(m,1));
 baseline_vector_reshaped = reshape(baseline_vector, p*p, 3);
 RhReshaped = reshape(Rh, p*p, 1);
 % Reshape direction_matrix to be (513*513, 3) for easy matrix multiplication
-direction_matrix_reshaped = reshape(direction_matrix, 513*513, 3);
-direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
-display(size(direction_matrix_reshaped_transpose))
+%direction_matrix_reshaped = reshape(direction_matrix, 513*513, 3);
+%direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
+%display(size(direction_matrix_reshaped_transpose))
 % Compute the matrix exponential in a vectorized manner
 % Compute the dot product between each baseline and each direction vector
 % We use the transpose of direction_matrix_reshaped to multiply with baseline_vector_reshaped
 % Resulting matrix size will be (p*p, 513*513)
 
-components = sum(baseline_vector_reshaped * direction_matrix_reshaped_transpose, 2);
+%components = sum(baseline_vector_reshaped * direction_matrix_reshaped_transpose, 2);
 
 % Now exponentiate the result (element-wise) and sum over all the baselines
 % First, exponentiate with 1j
-exp_components = exp(1j * components);
+%exp_components = exp(1j * components);
 
 % Sum over all baseline components (first dimension) and reshape back to 513x513
-dirty_beam = reshape(sum(exp_components, 1), [513, 513]);
+%dirty_beam = reshape(sum(exp_components, 1), [513, 513]);
 
 % Calculate the dirty beam using a matrix exponential (permute?)
 % dirty_beam = exp(1j*baseline_vector*permute(direction_matrix,[3 1 2])),[1 2])
@@ -146,12 +146,14 @@ colorbar;          % Display a color bar to the right
 % Set the color axis limits (optional, for consistent color scaling)
 caxis([0, 5000]); % 5000 looks cool
 
+
+% Plot dirty Image
 figure;
 imagesc(abs(dirtyImage));
 axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;  
-caxis([0, 300]);
+caxis([100, 300]);
 % save any matrixes in xlsx files
 % filename = 'dirty_beam_513.xlsx';
 % writematrix(dirty_beam,filename);

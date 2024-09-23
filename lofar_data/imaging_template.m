@@ -62,15 +62,15 @@ baseline_y = (meshgrid(poslocal(:,2)) - meshgrid(poslocal(:,2)).');
 baseline_z = (meshgrid(poslocal(:,3)) - meshgrid(poslocal(:,3)).');
 baseline_vector = ones(p,p, 3);
 baseline_vector(:,:,1) = baseline_x;
-baseline_vector(:,:,2) = baseline_x;
-baseline_vector(:,:,3) = baseline_x;
+baseline_vector(:,:,2) = baseline_y;
+baseline_vector(:,:,3) = baseline_z;
 
 % define the direction matrix
 % Create 2D grids of l and m
 [L, M] = meshgrid(l, m);
 
 % Pre-allocate a 3D matrix for the direction vectors (513x513x3)
-direction_matrix = zeros(513, 513, 3);
+direction_matrix = zeros(size(l,1), size(l,1), 3);
 
 % Calculate n for each element where l^2 + m^2 <= 1
 valid_points = L.^2 + M.^2 <= 1;  % Logical mask for valid points within the unit circle
@@ -120,23 +120,21 @@ dirty_beam = reshape(sum(exp_components, 1), [513, 513]);
 
 % % Calculate the dirty_beam per direction vector in for loops (slow)
 % dirty_beam = ones(size(l,1), size(m,1))
-% sum = 0
-% for pos_l=1:size(l,1)
-%     for pos_m=1:size(m,1)
-%         n = sqrt(1 - l(pos_l)^2 - m(pos_m).^2);
-%         direction_vector = [l(pos_l),m(pos_m),n];
-%         for x = 1:p
-%             for y = 1:p
-%                 baseline = (z(x,:)-z(y,:));
-%                 component = baseline*transpose(direction_vector);
-%                 sum = sum +  exp(1j*component);
-%             end
-%         end
-%         dirty_beam(pos_l,pos_m) = sum;
-%         sum = 0;
-%     end
-%     disp(pos_l)
-% end
+
+for pos_l=1:size(l,1)
+    for pos_m=1:size(m,1)
+
+        n = sqrt(1 - l(pos_l)^2 - m(pos_m).^2);
+
+        direction_vector = [l(pos_l),m(pos_m),n];
+
+        component = baseline_vector_reshaped*transpose(direction_vector);
+
+        dirty_beam(pos_l,pos_m) = sum(exp(1j*component),1);
+
+    end
+    disp(pos_l)
+end
 
 % Plot dirty beam
 figure;
@@ -148,6 +146,6 @@ colorbar;          % Display a color bar to the right
 caxis([0, 5000]); % 5000 looks cool
 
 
-save any matrixes in xlsx files
-filename = 'dirty_beam_513.xlsx';
-writematrix(dirty_beam,filename);
+% save any matrixes in xlsx files
+% filename = 'dirty_beam_513.xlsx';
+% writematrix(dirty_beam,filename);

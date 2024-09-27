@@ -137,6 +137,58 @@ for pos_l=1:size(l,1)
     disp(pos_l)
 end
 
+
+%% Clean Algorithm
+dirtyImageCleanA = dirtyImage;
+q = 0;
+gamma = 0.01;
+varianceTreshold = 2000;
+sumOfVariances = sum(sum(abs(corrcoef(dirtyImageCleanA))))
+P_q = uint8.empty;
+VarianceQ = double.empty;
+while varianceTreshold <= sumOfVariances
+    q = q+1;
+    [maxPeak , I] = max(dirtyImageCleanA,[] ,'all');
+    [Pq, Pp] = ind2sub(size(dirtyImageCleanA),I);
+    P_q  = [P_q ; Pq , Pp];
+    VarianceQ = [VarianceQ ; maxPeak/dirty_beam(floor(pos_l/2),floor(pos_m/2))];
+    dirtyImageCleanA = dirtyImageCleanA - gamma*abs(VarianceQ(end))*minus(dirty_beam,dirty_beam(P_q(end)));
+    sumOfVariances = sum(sum(abs(corrcoef(dirtyImageCleanA))));
+end    
+
+
+function [beam] = Bsynth(image_size, beam_width)
+    % Generate and display synthetic beam (Gaussian bell curve)
+    % Arguments:
+    % image_size : Size of the output image (e.g., 100 for a 100x100 image)
+    % beam_width : Standard deviation (spread) of the Gaussian bell curve
+    
+    % Create a grid of (l, m) coordinates
+    l = linspace(-1, 1, image_size);  % l coordinates from -1 to 1
+    m = linspace(-1, 1, image_size);  % m coordinates from -1 to 1
+    [L, M] = meshgrid(l, m);          % 2D grid of (l, m) values
+    
+    % Calculate the distance from the center (0, 0)
+    d = sqrt(L.^2 + M.^2);
+    
+    % Gaussian beam shape
+    beam = exp(-d.^2 / (2 * beam_width^2));
+end
+
+
+beam_synth = size(size(l,1),2);
+disp(beam_synth);
+beam_synth = Bsynth(size(l,1), 2/size(l,1)*8);
+
+
+source_num = q;
+for q=1:source_num
+    sum_beam_synth = sum_beam_synth + 100*gamma*abs(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
+end    
+CleanAlgImage = dirtyImageCleanA + sum_beam_synth;
+%CleanAlgImage = dirtyImageCleanA + sum(gamma*VarianceQ*minus(beam_synth, beam_synth(P_q)));
+
+close all
 % Plot dirty beam
 figure;
 imagesc(abs(dirty_beam));
@@ -157,3 +209,19 @@ caxis([100, 300]);
 % save any matrixes in xlsx files
 % filename = 'dirty_beam_513.xlsx';
 % writematrix(dirty_beam,filename);
+
+% Plot Clean Algorithm Image
+figure;
+imagesc(abs(CleanAlgImage));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;  
+caxis([100, 300]);
+
+% Plot Clean Algorithm Image
+figure;
+imagesc(abs(sum_beam_synth));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;  
+%caxis([100, 300]);

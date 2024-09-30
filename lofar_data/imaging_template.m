@@ -148,13 +148,43 @@ P_q = uint8.empty;
 VarianceQ = double.empty;
 while varianceTreshold <= sumOfVariances
     q = q+1;
-    [maxPeak , I] = max(dirtyImageCleanA,[] ,'all');
+    [maxPeak , I] = max((dirtyImageCleanA),[] ,'all');
     [Pq, Pp] = ind2sub(size(dirtyImageCleanA),I);
     P_q  = [P_q ; Pq , Pp];
     VarianceQ = [VarianceQ ; maxPeak/dirty_beam(floor(pos_l/2),floor(pos_m/2))];
-    dirtyImageCleanA = dirtyImageCleanA - gamma*abs(VarianceQ(end))*minus(dirty_beam,dirty_beam(P_q(end)));
-    sumOfVariances = sum(sum(abs(corrcoef(dirtyImageCleanA))));
+    %dirtyImageCleanA = dirtyImageCleanA - gamma*(VarianceQ(end))*minus(dirty_beam,dirty_beam(P_q(end)));
+    dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*shift_center(dirty_beam,P_q(end,:)));
+    sumOfVariances = sum(sum((corrcoef(dirtyImageCleanA))));
 end    
+
+function new_matrix = shift_center(matrix, new_center)
+    % Get the dimensions of the input matrix
+    [m, n] = size(matrix);
+    
+    % Calculate the original center
+    original_center = int16([ceil(m / 2), ceil(n / 2)]);
+    
+    % Calculate the shifts
+    row_shift = (int16(new_center(1)) - original_center(1));
+    col_shift = (int16(new_center(2)) - original_center(2));
+    
+    % Create the new matrix initialized with zeros
+    new_matrix = zeros(size(matrix));
+    
+    % Create row and column indices for the original matrix
+    [rows, cols] = ndgrid(1:m, 1:n);
+    
+    % Calculate new positions
+    new_rows = int16(rows) + row_shift;
+    new_cols = int16(cols) + col_shift;
+    
+    % Find valid positions within the matrix bounds
+    valid_mask = (new_rows >= 1 & new_rows <= m) & (new_cols >= 1 & new_cols <= n);
+    
+    % Assign values to the new matrix at valid positions
+    new_matrix(new_rows(valid_mask), new_cols(valid_mask)) = matrix(rows(valid_mask), cols(valid_mask));
+end
+
 
 
 function [beam] = Bsynth(image_size, beam_width)
@@ -183,7 +213,8 @@ beam_synth = Bsynth(size(l,1), 2/size(l,1)*8);
 
 source_num = q;
 for q=1:source_num
-    sum_beam_synth = sum_beam_synth + 100*gamma*abs(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
+    %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
+    sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*shift_center(beam_synth,P_q(q,:));
 end    
 CleanAlgImage = dirtyImageCleanA + sum_beam_synth;
 %CleanAlgImage = dirtyImageCleanA + sum(gamma*VarianceQ*minus(beam_synth, beam_synth(P_q)));
@@ -220,7 +251,7 @@ caxis([100, 300]);
 
 % Plot Clean Algorithm Image
 figure;
-imagesc(abs(sum_beam_synth));
+imagesc(abs(dirtyImageCleanA));
 axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;  

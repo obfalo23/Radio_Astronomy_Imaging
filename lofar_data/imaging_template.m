@@ -42,7 +42,7 @@ D = max(dist(:)); % Maximum Baseline
 
 
 % define a grid of image coordinates (l,m) at the right resolution
-FracAngle = 4;% fraction of theoretical limit for angle resolution
+FracAngle = 1;% fraction of theoretical limit for angle resolution
                  % 0.25 means ~4x4 pixels in the main lobe
 dl = FracAngle * lambda / D; % width/height of a pixel
 l = 0:dl:1; % First image coordinate := cos(theta)cos(phi)
@@ -90,7 +90,7 @@ direction_matrix(:, :, 3) = N;  % n-coordinates
 disp('Direction vector matrix created with size:');
 disp(size(direction_matrix));
 
-% Demensions of dirty beam
+% Dimensions of dirty beam
 dirty_beam = zeros(res_l, res_m);
 dirtyImage = zeros(res_l, res_m);
 
@@ -102,25 +102,45 @@ RhReshaped = reshape(Rh, p*p, 1);
 direction_matrix_reshaped = reshape(direction_matrix, res_l*res_m, 3);
 direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
 
-divide_num = int16(res_l);
-[pos_l_list, pos_m_list] = ind2sub([res_l, res_m], 1:(res_l * res_m));
-for pos_l_m=1:(res_l*res_m)
-    pos_l = pos_l_list(pos_l_m); % idivide(pos_l_m,divide_num)+1;
-    pos_m = pos_m_list(pos_l_m); % pos_m = mod(pos_l_m,divide_num)+1;
-    if l(pos_l)^2 + m(pos_m)^2 > 1
-        dirty_beam(pos_l,pos_m) = 0;
-        dirtyImage(pos_l,pos_m) = 0;
-    else
-        component = exp(1j .* baseline_vector_reshaped * direction_matrix_reshaped_transpose(:,pos_l_m));
-        dirty_beam(pos_l,pos_m) = sum(component);
-        dirtyImage(pos_l,pos_m) = sum(RhReshaped.*component);
+% Calculate beamformer/array response for a certain direction.
+function [dirty_beam, dirtyImage] = beam_former(centre, res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose)
+
+    %check if centre is viable
+    if centre(1)^2 + centre(2)^2 > 1;
+        disp("Centre is not a viable point")
+        return;
     end
-    % if pos_m == res_l
-    %     disp(pos_l_m)
-    %     disp(pos_l)
-    %     disp(pos_m)
-    % end
+
+    % Dimensions of dirty beam
+    dirty_beam = zeros(res_l, res_m);
+    dirtyImage = zeros(res_l, res_m);
+
+    % Define a vector for the target location
+    N_centre = sqrt(1 - centre(1)^2 - centre(2)^2);
+    L_centre = centre(1);
+    M_centre = centre(2);
+    P_q = transpose([L_centre,M_centre,N_centre]);
+
+    divide_num = int16(res_l);
+    [pos_l_list, pos_m_list] = ind2sub([res_l, res_m], 1:(res_l * res_m));
+    for pos_l_m=1:(res_l*res_m)
+        pos_l = pos_l_list(pos_l_m); % idivide(pos_l_m,divide_num)+1;
+        pos_m = pos_m_list(pos_l_m); % pos_m = mod(pos_l_m,divide_num)+1;
+        if direction_matrix_reshaped_transpose(3,pos_l_m) == 0 %l(pos_l)^2 + m(pos_m)^2 > 1
+            dirty_beam(pos_l,pos_m) = 0;
+            dirtyImage(pos_l,pos_m) = 0;
+        else
+            component = exp(1j .* baseline_vector_reshaped * (direction_matrix_reshaped_transpose(:,pos_l_m) - P_q));
+            dirty_beam(pos_l,pos_m) = sum(component);
+            dirtyImage(pos_l,pos_m) = sum(RhReshaped.*component);
+        end
+        if pos_l == res_l
+            disp(pos_m)
+        end
+    end
 end
+
+[dirty_beam, dirtyImage] = beam_former([0,0], res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose);
 
 % Plot dirty beam
 figure;
@@ -128,15 +148,28 @@ imagesc(abs(dirty_beam));
 axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;          % Display a color bar to the right
+title('dirty_beam');
 % Set the color axis limits (optional, for consistent color scaling)
 caxis([100, 5000]); % 5000 looks cool
+
+% Plot dirty Image
+figure;
+imagesc(abs(dirtyImage));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;
+title('dirtyImage');
+caxis([100, 300]);
+% save any matrixes in xlsx files
+% filename = 'dirty_beam_513.xlsx';
+% writematrix(dirty_beam,filename);
 
 %% Clean Algorithm
 dirtyImageCleanA = dirtyImage;
 q = 0;
 gamma = 0.01;
-varianceTreshold = 2000;
 sumOfVariances = sum(sum(abs(corrcoef(dirtyImageCleanA))))
+varianceTreshold = sumOfVariances - 0.075*sumOfVariances;
 P_q = uint8.empty;
 VarianceQ = double.empty;
 while varianceTreshold <= sumOfVariances
@@ -144,11 +177,15 @@ while varianceTreshold <= sumOfVariances
     [maxPeak , I] = max((dirtyImageCleanA),[] ,'all');
     [Pq, Pp] = ind2sub(size(dirtyImageCleanA),I);
     P_q  = [P_q ; Pq , Pp];
-    VarianceQ = [VarianceQ ; maxPeak/dirty_beam(floor(pos_l/2),floor(pos_m/2))];
+    l = direction_matrix(P_q(end,1),P_q(end,2),1)
+    m = direction_matrix(P_q(end,1),P_q(end,2),2)
+    VarianceQ = [VarianceQ ; maxPeak/dirty_beam(floor(res_l/2),floor(res_m/2))];
     %dirtyImageCleanA = dirtyImageCleanA - gamma*(VarianceQ(end))*minus(dirty_beam,dirty_beam(P_q(end)));
-    dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*shift_center(dirty_beam,P_q(end,:)));
+    %dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*shift_center(dirty_beam,P_q(end,:)));
+    [dirty_beam, dirtyImage] = beam_former([l,m], res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose);
+    dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*dirty_beam);
     sumOfVariances = sum(sum((corrcoef(dirtyImageCleanA))));
-end    
+end
 
 function new_matrix = shift_center(matrix, new_center)
     % Get the dimensions of the input matrix
@@ -175,18 +212,20 @@ function new_matrix = shift_center(matrix, new_center)
     valid_mask = (new_rows >= 1 & new_rows <= m) & (new_cols >= 1 & new_cols <= n);
     
     % Assign values to the new matrix at valid positions
-    new_matrix(new_rows(valid_mask), new_cols(valid_mask)) = matrix(rows(valid_mask), cols(valid_mask));
+    new_matrix_intermediate = matrix(rows(valid_mask(:,1)), cols(valid_mask(1,:)));
+    new_matrix(new_rows(valid_mask), new_cols(valid_mask)) = new_matrix_intermediate;
 end
 
-function [beam] = Bsynth(image_size, beam_width)
+function [beam] = Bsynth(image_size, beam_width, centre)
     % Generate and display synthetic beam (Gaussian bell curve)
     % Arguments:
     % image_size : Size of the output image (e.g., 100 for a 100x100 image)
     % beam_width : Standard deviation (spread) of the Gaussian bell curve
+    % centre     : Coordinates of the centre of the bell curve
     
     % Create a grid of (l, m) coordinates
-    l = linspace(-1, 1, image_size);  % l coordinates from -1 to 1
-    m = linspace(-1, 1, image_size);  % m coordinates from -1 to 1
+    l = linspace(-1+centre(1), 1+centre(1), image_size);  % l coordinates from -1 to 1
+    m = linspace(-1+centre(2), 1+centre(2), image_size);  % m coordinates from -1 to 1
     [L, M] = meshgrid(l, m);          % 2D grid of (l, m) values
     
     % Calculate the distance from the center (0, 0)
@@ -195,40 +234,33 @@ function [beam] = Bsynth(image_size, beam_width)
     % Gaussian beam shape
     beam = exp(-d.^2 / (2 * beam_width^2));
 end
+%% 
 
-beam_synth = size(size(l,1),2);
-disp(beam_synth);
-beam_synth = Bsynth(size(l,1), 2/size(l,1)*8);
+beam_synth = size(res_l,2);
+bell_width = res_l/10;
+gain = 300;
+beam_synth = gain * Bsynth(res_l, bell_width, [0,0]);
+
+% Plot synth beam
+figure;
+imagesc(beam_synth);
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;
+title('example Bell shape in centre');
+caxis([100, 300]);
 
 source_num = q;
 sum_beam_synth = zeros(res_l,res_m)
 for q=1:source_num
+    l = direction_matrix(P_q(q,1),P_q(q,2),1)
+    m = direction_matrix(P_q(q,1),P_q(q,2),2)
     %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
-    sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*shift_center(beam_synth,P_q(q,:));
-end    
+    %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*shift_center(beam_synth,P_q(q,:));
+    sum_beam_synth = sum_beam_synth + gain*gamma*VarianceQ(q)*Bsynth(res_l, bell_width, [l,m]);
+end
 CleanAlgImage = dirtyImageCleanA + sum_beam_synth;
 %CleanAlgImage = dirtyImageCleanA + sum(gamma*VarianceQ*minus(beam_synth, beam_synth(P_q)));
-
-close all
-
-% Plot dirty Image
-figure;
-imagesc(abs(dirtyImage));
-axis equal;        % Make axes equal for proper aspect ratio
-colormap('jet');   % Use the 'jet' colormap for colors
-colorbar;  
-caxis([100, 300]);
-% save any matrixes in xlsx files
-% filename = 'dirty_beam_513.xlsx';
-% writematrix(dirty_beam,filename);
-
-% Plot Clean Algorithm Image
-figure;
-imagesc(abs(CleanAlgImage));
-axis equal;        % Make axes equal for proper aspect ratio
-colormap('jet');   % Use the 'jet' colormap for colors
-colorbar;  
-caxis([100, 300]);
 
 % Plot Clean Algorithm Image
 figure;
@@ -236,4 +268,14 @@ imagesc(abs(dirtyImageCleanA));
 axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;  
-%caxis([100, 300]);
+title('dirtyImageCleanA');
+caxis([100, 300]);
+
+% Plot Clean Algorithm Image
+figure;
+imagesc(abs(CleanAlgImage));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;  
+title('CleanAlgImage');
+caxis([100, 300]);

@@ -42,7 +42,7 @@ D = max(dist(:)); % Maximum Baseline
 
 
 % define a grid of image coordinates (l,m) at the right resolution
-FracAngle = 0.25;% fraction of theoretical limit for angle resolution
+FracAngle = 4;% fraction of theoretical limit for angle resolution
                  % 0.25 means ~4x4 pixels in the main lobe
 dl = FracAngle * lambda / D; % width/height of a pixel
 l = 0:dl:1; % First image coordinate := cos(theta)cos(phi)
@@ -52,6 +52,8 @@ m = l;  % Second image coordinate := cos(theta)sin(phi)
 
 %% Your Imaging Algorithm should come hereafter...
 % Calculate dirty beam pattern
+res_l = size(l,1);
+res_m = size(m,1);
 
 % Define normalized location vector
 z = (pi*freq/c) * poslocal;
@@ -69,14 +71,14 @@ baseline_vector(:,:,3) = baseline_z;
 % Create 2D grids of l and m
 [L, M] = meshgrid(l, m);
 
-% Pre-allocate a 3D matrix for the direction vectors (513x513x3)
-direction_matrix = zeros(size(l,1), size(l,1), 3);
+% Pre-allocate a 3D matrix for the direction vectors (max resolution: 513x513x3)
+direction_matrix = zeros(res_l, res_m, 3);
 
 % Calculate n for each element where l^2 + m^2 <= 1
 valid_points = L.^2 + M.^2 <= 1;  % Logical mask for valid points within the unit circle
 
 % Compute n only for valid points, otherwise leave as zero
-N = zeros(size(L));  % Initialize n to zero
+N = zeros(res_l);  % Initialize n to zero
 N(valid_points) = sqrt(1 - L(valid_points).^2 - M(valid_points).^2);  % Calculate n
 
 % Store the l, m, and n components in the direction_matrix
@@ -88,55 +90,46 @@ direction_matrix(:, :, 3) = N;  % n-coordinates
 disp('Direction vector matrix created with size:');
 disp(size(direction_matrix));
 
-% Matrix exponential method
-% Sum all the Multiplies with on element of the baseline vector and one
-% element of the direction vector, do this for all direction vectors.
 % Demensions of dirty beam
-dirty_beam = zeros(size(l,1), size(m,1));
-dirtyImage = zeros(size(l,1), size(m,1));
+dirty_beam = zeros(res_l, res_m);
+dirtyImage = zeros(res_l, res_m);
+
 % Reshape baseline_vector to be (p*p, 3) for easy matrix multiplication
 baseline_vector_reshaped = reshape(baseline_vector, p*p, 3);
 RhReshaped = reshape(Rh, p*p, 1);
-% Reshape direction_matrix to be (513*513, 3) for easy matrix multiplication
-%direction_matrix_reshaped = reshape(direction_matrix, 513*513, 3);
-%direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
-%display(size(direction_matrix_reshaped_transpose))
-% Compute the matrix exponential in a vectorized manner
-% Compute the dot product between each baseline and each direction vector
-% We use the transpose of direction_matrix_reshaped to multiply with baseline_vector_reshaped
-% Resulting matrix size will be (p*p, 513*513)
 
-%components = sum(baseline_vector_reshaped * direction_matrix_reshaped_transpose, 2);
+% Reshape direction_matrix to be (res_l,res_m, 3) for easy matrix multiplication
+direction_matrix_reshaped = reshape(direction_matrix, res_l*res_m, 3);
+direction_matrix_reshaped_transpose = direction_matrix_reshaped.';
 
-% Now exponentiate the result (element-wise) and sum over all the baselines
-% First, exponentiate with 1j
-%exp_components = exp(1j * components);
-
-% Sum over all baseline components (first dimension) and reshape back to 513x513
-%dirty_beam = reshape(sum(exp_components, 1), [513, 513]);
-
-% Calculate the dirty beam using a matrix exponential (permute?)
-% dirty_beam = exp(1j*baseline_vector*permute(direction_matrix,[3 1 2])),[1 2])
-
-% % Calculate the dirty_beam per direction vector in for loops (slow)
-% dirty_beam = ones(size(l,1), size(m,1))
-
-for pos_l=1:size(l,1)
-    for pos_m=1:size(m,1)
-
-        n = sqrt(1 - l(pos_l)^2 - m(pos_m).^2);
-
-        direction_vector = [l(pos_l),m(pos_m),n];
-
-        component = baseline_vector_reshaped*transpose(direction_vector);
-
-        dirty_beam(pos_l,pos_m) = sum(exp(1j*component),1);
-        dirtyImage(pos_l,pos_m) = sum(RhReshaped.*exp(1j*component),1);
-
+divide_num = int16(res_l);
+[pos_l_list, pos_m_list] = ind2sub([res_l, res_m], 1:(res_l * res_m));
+for pos_l_m=1:(res_l*res_m)
+    pos_l = pos_l_list(pos_l_m); % idivide(pos_l_m,divide_num)+1;
+    pos_m = pos_m_list(pos_l_m); % pos_m = mod(pos_l_m,divide_num)+1;
+    if l(pos_l)^2 + m(pos_m)^2 > 1
+        dirty_beam(pos_l,pos_m) = 0;
+        dirtyImage(pos_l,pos_m) = 0;
+    else
+        component = exp(1j .* baseline_vector_reshaped * direction_matrix_reshaped_transpose(:,pos_l_m));
+        dirty_beam(pos_l,pos_m) = sum(component);
+        dirtyImage(pos_l,pos_m) = sum(RhReshaped.*component);
     end
-    disp(pos_l)
+    % if pos_m == res_l
+    %     disp(pos_l_m)
+    %     disp(pos_l)
+    %     disp(pos_m)
+    % end
 end
 
+% Plot dirty beam
+figure;
+imagesc(abs(dirty_beam));
+axis equal;        % Make axes equal for proper aspect ratio
+colormap('jet');   % Use the 'jet' colormap for colors
+colorbar;          % Display a color bar to the right
+% Set the color axis limits (optional, for consistent color scaling)
+caxis([100, 5000]); % 5000 looks cool
 
 %% Clean Algorithm
 dirtyImageCleanA = dirtyImage;
@@ -185,8 +178,6 @@ function new_matrix = shift_center(matrix, new_center)
     new_matrix(new_rows(valid_mask), new_cols(valid_mask)) = matrix(rows(valid_mask), cols(valid_mask));
 end
 
-
-
 function [beam] = Bsynth(image_size, beam_width)
     % Generate and display synthetic beam (Gaussian bell curve)
     % Arguments:
@@ -205,13 +196,12 @@ function [beam] = Bsynth(image_size, beam_width)
     beam = exp(-d.^2 / (2 * beam_width^2));
 end
 
-
 beam_synth = size(size(l,1),2);
 disp(beam_synth);
 beam_synth = Bsynth(size(l,1), 2/size(l,1)*8);
 
-
 source_num = q;
+sum_beam_synth = zeros(res_l,res_m)
 for q=1:source_num
     %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
     sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*shift_center(beam_synth,P_q(q,:));
@@ -220,15 +210,6 @@ CleanAlgImage = dirtyImageCleanA + sum_beam_synth;
 %CleanAlgImage = dirtyImageCleanA + sum(gamma*VarianceQ*minus(beam_synth, beam_synth(P_q)));
 
 close all
-% Plot dirty beam
-figure;
-imagesc(abs(dirty_beam));
-axis equal;        % Make axes equal for proper aspect ratio
-colormap('jet');   % Use the 'jet' colormap for colors
-colorbar;          % Display a color bar to the right
-% Set the color axis limits (optional, for consistent color scaling)
-caxis([0, 5000]); % 5000 looks cool
-
 
 % Plot dirty Image
 figure;

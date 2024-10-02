@@ -165,26 +165,45 @@ caxis([100, 300]);
 % writematrix(dirty_beam,filename);
 
 %% Clean Algorithm
+close all
 dirtyImageCleanA = dirtyImage;
 q = 0;
-gamma = 0.01;
-sumOfVariances = sum(sum(abs(corrcoef(dirtyImageCleanA))))
-varianceTreshold = sumOfVariances - 0.075*sumOfVariances;
+gamma = 0.1;
+sumOfVariances = sum(sum(abs(corrcoef(abs(dirtyImageCleanA)))))
+varianceTreshold = sumOfVariances - 0.25*sumOfVariances;
 P_q = uint8.empty;
 VarianceQ = double.empty;
 while varianceTreshold <= sumOfVariances
-    q = q+1;
-    [maxPeak , I] = max((dirtyImageCleanA),[] ,'all');
+    q = q + 1;
+    [maxPeak , I] = max(abs(dirtyImageCleanA),[] ,'all');
     [Pq, Pp] = ind2sub(size(dirtyImageCleanA),I);
     P_q  = [P_q ; Pq , Pp];
     l = direction_matrix(P_q(end,1),P_q(end,2),1)
     m = direction_matrix(P_q(end,1),P_q(end,2),2)
     VarianceQ = [VarianceQ ; maxPeak/dirty_beam(floor(res_l/2),floor(res_m/2))];
-    %dirtyImageCleanA = dirtyImageCleanA - gamma*(VarianceQ(end))*minus(dirty_beam,dirty_beam(P_q(end)));
-    %dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*shift_center(dirty_beam,P_q(end,:)));
-    [dirty_beam, dirtyImage] = beam_former([l,m], res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose);
-    dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*dirty_beam);
-    sumOfVariances = sum(sum((corrcoef(dirtyImageCleanA))));
+    
+    [shifted_dirty_beam, shifted_dirty_image] = beam_former([l,m], res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose);
+    dirtyImageCleanA = dirtyImageCleanA - (gamma*(VarianceQ(end))*shifted_dirty_beam);
+    sumOfVariances = sum(sum((corrcoef(abs(dirtyImageCleanA)))));
+
+    % Plot dirty beam
+    figure;
+    imagesc(abs(shifted_dirty_beam));
+    axis equal;        % Make axes equal for proper aspect ratio
+    colormap('jet');   % Use the 'jet' colormap for colors
+    colorbar;          % Display a color bar to the right
+    title('shifted_dirty_beam');
+    % Set the color axis limits (optional, for consistent color scaling)
+    caxis([100, 5000]); % 5000 looks cool
+    
+    % Plot dirty Image
+    figure;
+    imagesc(abs(dirtyImageCleanA));
+    axis equal;        % Make axes equal for proper aspect ratio
+    colormap('jet');   % Use the 'jet' colormap for colors
+    colorbar;
+    title('dirtyImageCleanA');
+    caxis([100, 300]);
 end
 
 function new_matrix = shift_center(matrix, new_center)
@@ -255,12 +274,9 @@ sum_beam_synth = zeros(res_l,res_m)
 for q=1:source_num
     l = direction_matrix(P_q(q,1),P_q(q,2),1)
     m = direction_matrix(P_q(q,1),P_q(q,2),2)
-    %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*minus(beam_synth, beam_synth(P_q(q)));
-    %sum_beam_synth = sum_beam_synth + gamma*(VarianceQ(q))*shift_center(beam_synth,P_q(q,:));
     sum_beam_synth = sum_beam_synth + gain*gamma*VarianceQ(q)*Bsynth(res_l, bell_width, [l,m]);
 end
 CleanAlgImage = dirtyImageCleanA + sum_beam_synth;
-%CleanAlgImage = dirtyImageCleanA + sum(gamma*VarianceQ*minus(beam_synth, beam_synth(P_q)));
 
 % Plot Clean Algorithm Image
 figure;

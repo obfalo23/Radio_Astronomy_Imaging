@@ -150,7 +150,7 @@ colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;          % Display a color bar to the right
 title('dirty_beam');
 % Set the color axis limits (optional, for consistent color scaling)
-caxis([100, 5000]); % 5000 looks cool
+%caxis([100, 5000]); % 5000 looks cool
 
 % Plot dirty Image
 figure;
@@ -159,7 +159,7 @@ axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;
 title('dirtyImage');
-caxis([100, 300]);
+%caxis([100, 300]);
 % save any matrixes in xlsx files
 % filename = 'dirty_beam_513.xlsx';
 % writematrix(dirty_beam,filename);
@@ -171,10 +171,10 @@ close all
 dirtyImageCleanA = dirtyImage_normalized;
 dirtyBeamCleanA = dirty_beam_normalized;
 q = 0;
-gamma = 0.1;
+gamma = 0.5;
 sumOfVariances = sum(sum(abs(corrcoef(abs(dirtyImageCleanA)))))
 varianceTreshold = sumOfVariances - 0.5*sumOfVariances;
-P_q = uint8.empty;
+P_q = int16.empty;
 VarianceQ = double.empty;
 while varianceTreshold <= sumOfVariances && q < 4
     q = q + 1;
@@ -185,9 +185,9 @@ while varianceTreshold <= sumOfVariances && q < 4
 
     [row, col] = ind2sub(size(dirtyImageCleanA),Index);
     P_q  = [P_q ; row , col];
-    l = direction_matrix(P_q(end,1),P_q(end,2),1)
-    m = direction_matrix(P_q(end,1),P_q(end,2),2)
-    VarianceQ = [VarianceQ ; maxPeak/dirtyBeamCleanA(floor(res_l/2),floor(res_m/2))];
+    l = direction_matrix(P_q(end,1),P_q(end,2),1);
+    m = direction_matrix(P_q(end,1),P_q(end,2),2);
+    VarianceQ = [VarianceQ ; maxPeak/dirtyBeamCleanA(ceil(res_l/2),ceil(res_m/2))];
     
     [shifted_dirty_beam, shifted_dirty_image] = beam_former([l,m], res_l, res_m, baseline_vector_reshaped, RhReshaped, direction_matrix_reshaped_transpose);
     shifted_dirty_beam_norm = (shifted_dirty_beam - min(shifted_dirty_beam(:)))/(max(shifted_dirty_beam(:)) - min(shifted_dirty_beam(:)));
@@ -202,7 +202,7 @@ while varianceTreshold <= sumOfVariances && q < 4
     colorbar;          % Display a color bar to the right
     title('shifted_dirty_beam_norm');
     % Set the color axis limits (optional, for consistent color scaling)
-    caxis([100, 5000]); % 5000 looks cool
+    %caxis([100, 5000]); % 5000 looks cool
     
     % Plot dirty Image
     figure;
@@ -211,7 +211,7 @@ while varianceTreshold <= sumOfVariances && q < 4
     colormap('jet');   % Use the 'jet' colormap for colors
     colorbar;
     title('dirtyImageCleanA');
-    caxis([100, 300]);
+    %caxis([100, 300]);
 end
 
 
@@ -246,13 +246,13 @@ axis equal;        % Make axes equal for proper aspect ratio
 colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;
 title('example Bell shape in centre');
-caxis([100, 300]);
+%caxis([100, 300]);
 
 source_num = q;
-sum_beam_synth = zeros(res_l,res_m)
+sum_beam_synth = zeros(res_l,res_m);
 for q=1:source_num
-    l = direction_matrix(P_q(q,1),P_q(q,2),1)
-    m = direction_matrix(P_q(q,1),P_q(q,2),2)
+    l = direction_matrix(P_q(q,1),P_q(q,2),1);
+    m = direction_matrix(P_q(q,1),P_q(q,2),2);
     sum_beam_synth = sum_beam_synth + gain*gamma*VarianceQ(q)*Bsynth(res_l, bell_width, [l,m]);
 end
 CleanAlgImage = dirtyImageCleanA + sum_beam_synth;

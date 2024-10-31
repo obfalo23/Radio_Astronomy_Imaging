@@ -42,7 +42,7 @@ D = max(dist(:)); % Maximum Baseline
 
 
 % define a grid of image coordinates (l,m) at the right resolution
-FracAngle = 1 % 0.0625;% fraction of theoretical limit for angle resolution
+FracAngle = 0.25; % 0.0625;% fraction of theoretical limit for angle resolution
                  % 0.25 means ~4x4 pixels in the main lobe
 dl = FracAngle * lambda / D; % width/height of a pixel
 l = 0:dl:1; % First image coordinate := cos(theta)cos(phi)
@@ -149,9 +149,9 @@ function [dirty_beam_internal, beam_former_image, MVDR_image_internal, AAR_image
         end
     end
 end
-make_MVDR = 0;
+make_MVDR = 1; %set to zero if for no generation of MVDR
 [dirty_beam, dirty_image, MVDR_image, AAR_image] = beam_former([0,0], res_l, res_m, z, Rh, direction_matrix_reshaped, make_MVDR);
-
+make_MVDR = 0;
 %% 
 close all;
 
@@ -184,7 +184,7 @@ abs_dirty_image(abs_dirty_image == 0) = inf;
 min_color = min(abs_dirty_image,[],"all");
 caxis([min_color, max_color]);
 
-if make_MVDR == 1
+%if make_MVDR == 1
     % Plot dirty Image using MVDR
     fig3 = figure;
     imagesc(abs_MVDR_image);
@@ -208,14 +208,14 @@ if make_MVDR == 1
     abs_AAR_image(abs_AAR_image == 0) = inf;
     min_color = min(abs_AAR_image,[],"all");
     caxis([min_color, max_color]);
-end
+%end
 
 % Align all figures, you need the image processing toolbox for this!
 iptwindowalign(fig1,"right",fig2,"left");
-if make_MVDR == 1
+%if make_MVDR == 1
     iptwindowalign(fig1,"bottom",fig3,"top");
     iptwindowalign(fig3,"right",fig4,"left");
-end
+%end
 
 % Celebrate
 disp("yay done with this")
@@ -236,10 +236,10 @@ end
 dirty_beam_normalized = normalize_image(dirty_beam);
 dirty_image_normalized = normalize_image(dirty_image);
 
-if make_MVDR == 1
+%if make_MVDR == 1
     MVDR_image_normalized = normalize_image(MVDR_image);
     AAR_image_normalized = normalize_image(AAR_image);
-end
+%end
 
 % Plot dirty beam
 fig1 = figure;
@@ -257,7 +257,7 @@ colormap('jet');   % Use the 'jet' colormap for colors
 colorbar;
 title('beam former image (dirty)');
 
-if make_MVDR == 1
+%if make_MVDR == 1
     % Plot dirty Image using MVDR
     fig3 = figure;
     imagesc(MVDR_image_normalized);
@@ -273,14 +273,14 @@ if make_MVDR == 1
     colormap('jet');   % Use the 'jet' colormap for colors
     colorbar;
     title('AAR image');
-end
+%end
 
 % Align all figures, you need the image processing toolbox for this!
 iptwindowalign(fig1,"right",fig2,"left");
-if make_MVDR == 1
+%if make_MVDR == 1
     iptwindowalign(fig1,"bottom",fig3,"top");
     iptwindowalign(fig3,"right",fig4,"left");
-end
+%end
 
 disp("Yaay also done with this")
 
@@ -288,24 +288,24 @@ disp("Yaay also done with this")
 close all
 % If you want to use the MVDR image replace by MVDR_image_normalized
 % If you want to use the Dirty image replace by dirty_image_normalized
-if make_MVDR == 1
+%if make_MVDR == 1
     dirty_image_CLEAN = MVDR_image_normalized;
-else
-    dirty_image_CLEAN = dirty_image_normalized;
-end
+%else
+    %dirty_image_CLEAN = dirty_image_normalized;
+%end
 
 dirty_beam_CLEAN = dirty_beam_normalized;
 abs_DI_CLEAN = abs(dirty_image_CLEAN);
 
 % Initializing Clean algorithm
 q = 0;
-gamma = 0.5;
+gamma = 0.05;
 % sumOfVariances = sum(sum(abs(corrcoef(abs_DI_CLEAN))))
 sumOfVariances = norm(abs_DI_CLEAN)
-varianceTreshold = sumOfVariances - 0.9*sumOfVariances
+varianceTreshold = sumOfVariances - 0.5*sumOfVariances
 P_q = int16.empty;
 VarianceQ = double.empty;
-while varianceTreshold <= sumOfVariances && q < 5
+while varianceTreshold <= sumOfVariances && q < 4
     q = q + 1
     [maxPeak , Index] = max(dirty_image_CLEAN,[],"all"); % Find the maximum of the dirty_image
     disp(Index)
@@ -405,8 +405,8 @@ sum_beam_synth = zeros(res_l,res_m);
 for q=1:source_num - 1
     disp(P_q(q,1))
     disp(P_q(q,2))
-    l = direction_matrix(res_l-P_q(q,2),res_l-P_q(q,1),2)
-    m = direction_matrix(res_l-P_q(q,2),res_l-P_q(q,1),1)
+    l = direction_matrix(res_l-P_q(q,2),res_l-P_q(q,1),2);
+    m = direction_matrix(res_l-P_q(q,2),res_l-P_q(q,1),1);
     steered_synth_beam = gain*gamma*VarianceQ(q)*Bsynth(res_l, bell_width, [l,m]);
     sum_beam_synth = sum_beam_synth + steered_synth_beam;
 end
@@ -420,10 +420,10 @@ abs_DI = abs(dirty_image);
 abs_DI_CLEAN = abs(dirty_image_CLEAN);
 abs_CLEAN = abs(CleanAlgImage);
 
-if make_MVDR == 1
+%if make_MVDR == 1
     abs_MVDR = abs(MVDR_image_normalized);
     abs_AAR = abs(AAR_image_normalized);
-end
+%end
 
 fig1 = figure;
 imagesc(abs_DB);
@@ -456,7 +456,7 @@ title('Clean Image without beamsynth');
 max_color = max(abs_DI_CLEAN,[],"all");
 abs_DI_CLEAN(abs_DI_CLEAN == 0) = inf;
 min_color = min(abs_DI_CLEAN,[],"all");
-caxis([min_color, max_color]);
+clim([min_color, max_color]);
 
 fig4 = figure;
 imagesc(abs_CLEAN);
@@ -469,7 +469,7 @@ abs_CLEAN(abs_CLEAN == 0) = inf;
 min_color = min(abs_CLEAN,[],"all");
 caxis([min_color, max_color]);
 
-if make_MVDR == 1
+%if make_MVDR == 1
     fig5 = figure;
     imagesc(abs_MVDR);
     axis equal;        % Make axes equal for proper aspect ratio
@@ -490,15 +490,15 @@ if make_MVDR == 1
     max_color = max(abs_AAR,[],"all");
     abs_AAR(abs_AAR == 0) = inf;
     min_color = min(abs_AAR,[],"all");
-    caxis([min_color, max_color]);
-end
+    clim([min_color, max_color]);
+%end
 
 % Align all figures, you need the image processing toolbox for this!
 iptwindowalign(fig1,"right",fig2,"left");
 iptwindowalign(fig1,"bottom",fig3,"top");
 iptwindowalign(fig3,"right",fig4,"left");
-if make_MVDR == 1
+%if make_MVDR == 1
     iptwindowalign(fig2,"right",fig5,"left");
     iptwindowalign(fig4,"right",fig6,"left");
-end
+%end
 
